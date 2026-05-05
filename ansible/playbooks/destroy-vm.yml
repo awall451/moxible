@@ -1,0 +1,72 @@
+---
+# Stop + destroy one or more VMs. Critical-VMID protection in
+# .claude/hooks/proxmox-guard.py still hard-denies any destroy verb that
+# targets a VMID listed in .claude/.critical-vmid (currently: 202).
+#
+# Usage:
+#   ansible-playbook playbooks/destroy-vm.yml -e vmid=204
+#   ansible-playbook playbooks/destroy-vm.yml -e 'vmids=[204,205]'
+#
+# The playbook only acts on vmids that exist; non-existent ones are skipped.
+
+- name: Destroy VMs
+  hosts: pve
+  become: true
+  gather_facts: false
+
+  vars:
+    # Resolve a single -e vmid=N OR a list -e 'vmids=[a,b]' into a uniform list.
+    vmid_list: "{{ vmids | default([vmid] if (vmid is defined) else []) }}"
+
+  tasks:
+    - name: Sanity — at least one VMID requested
+      ansible.builtin.assert:
+        that: vmid_list | length > 0
+        fail_msg: "Pass -e vmid=<N> or -e 'vmids=[a,b,c]'."
+
+    - name: Probe each VMID
+      ansible.builtin.command:
+        cmd: "qm status {{ item }}"
+      register: probe
+      failed_when: false
+      changed_when: false
+      loop: "{{ vmid_list }}"
+
+    - name: Build exists map
+      ansible.builtin.set_fact:
+        vm_exists: "{{ vm_exists | default({}) | combine({item.item: item.rc == 0}) }}"
+      loop: "{{ probe.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Stop running VMs (graceful first via shutdown)
+      ansible.builtin.command:
+        cmd: "qm shutdown {{ item }} --timeout 30 --forceStop 1"
+      loop: "{{ vmid_list }}"
+      when: vm_exists[item]
+      register: shutdown_result
+      failed_when:
+        - shutdown_result.rc is defined
+        - shutdown_result.rc != 0
+        - "'is not running' not in (shutdown_result.stderr | default(''))"
+
+    - name: Destroy
+      ansible.builtin.command:
+        cmd: "qm destroy {{ item }} --purge 1 --skiplock 0"
+      loop: "{{ vmid_list }}"
+      when: vm_exists[item]
+
+    - name: Confirm gone
+      ansible.builtin.command:
+        cmd: "qm status {{ item }}"
+      register: post_check
+      failed_when: false
+      changed_when: false
+      loop: "{{ vmid_list }}"
+
+    - name: Report
+      ansible.builtin.debug:
+        msg: "VMID {{ item.item }} -> {{ 'destroyed' if item.rc != 0 else 'STILL EXISTS' }}"
+      loop: "{{ post_check.results }}"
+      loop_control:
+        label: "{{ item.item }}"

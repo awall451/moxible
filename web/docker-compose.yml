@@ -1,0 +1,35 @@
+services:
+  proxmox-deployer:
+    container_name: proxmox-deployer
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: proxmox-deployer:latest
+    ports:
+      - "4080:4080"
+    volumes:
+      - ${HOME}/.ssh:/mnt/ssh-ro:ro
+      - ${REPO_ROOT:-../..}:/repo:ro
+      - ./data:/data
+    environment:
+      NODE_ENV: production
+      PORT: 4080
+      HOST: 0.0.0.0
+      BIND_ADDR: 0.0.0.0
+      ORIGIN: http://proxmox-deployer.localhost
+      ALLOWED_ORIGINS: http://proxmox-deployer.localhost,http://localhost:4080
+      REPO_ROOT: /repo
+      ARTIFACTS_DIR: /data/runs
+      ANSIBLE_CONFIG: /repo/ansible/ansible.cfg
+      ANSIBLE_CALLBACK_PLUGINS: /app/ansible-callbacks
+      ANSIBLE_COLLECTIONS_PATH: /usr/share/ansible/collections
+      PVE_HOST: 10.1.10.150
+      PVE_BASTION: argonpi
+      PVE_USER: root
+      SSH_KEY_PATH: /root/.ssh/id_ed25519_pve
+      DEFAULT_PUBKEY_PATH: /root/.ssh/id_ed25519_pve.pub
+      CLOUD_USER: dillon
+    restart: unless-stopped
+    labels:
+      gantry.enable: "true"
+      gantry.subdomain: "proxmox-deployer"

@@ -1,0 +1,14 @@
+---
+# Lowest-precedence defaults. Override in group_vars/, host_vars/, or -e.
+node_exporter_version: "1.8.2"
+node_exporter_arch: "amd64"
+
+node_exporter_user: prometheus
+node_exporter_group: "{{ node_exporter_user }}"
+
+node_exporter_listen_address: "0.0.0.0:9100"
+node_exporter_textfile_dir: "/var/lib/node_exporter/textfile_collector"
+node_exporter_extra_args: ""
+
+# Where the binary lives. Per `local_bin` group var.
+node_exporter_binary: "{{ local_bin | default('/usr/local/bin') }}/node_exporter"

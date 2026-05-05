@@ -1,0 +1,11 @@
+---
+# Mirrors ansible/requirements.yml. Baked into the image so the container can
+# install collections at build time without mounting the repo.
+collections:
+  - name: ansible.posix
+    version: ">=1.5.0"
+  - name: community.general
+    version: ">=8.0.0"
+  - name: ansible.utils
+    version: ">=4.0.0"
+roles: []

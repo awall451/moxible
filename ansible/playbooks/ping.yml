@@ -1,0 +1,22 @@
+---
+# Smoke test. Reaches every host, runs `ansible.builtin.ping` (which checks
+# Python is usable on the remote), prints fact summary.
+#
+#   ansible-playbook playbooks/ping.yml
+- name: Reachability + facts smoke test
+  hosts: all
+  gather_facts: true
+
+  tasks:
+    - name: Ping
+      ansible.builtin.ping:
+
+    - name: Print one-line host summary
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }} —
+          {{ ansible_distribution | default('?') }}
+          {{ ansible_distribution_version | default('?') }},
+          kernel {{ ansible_kernel | default('?') }},
+          {{ ansible_processor_vcpus | default('?') }} vCPU,
+          {{ (ansible_memtotal_mb | default(0)) }}MB RAM

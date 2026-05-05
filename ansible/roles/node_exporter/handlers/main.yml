@@ -1,0 +1,8 @@
+---
+# Handlers run ONLY when notified by a task. They run once at the end of a
+# play, no matter how many tasks notified them. Think "callback queue."
+- name: Restart node_exporter
+  ansible.builtin.systemd_service:
+    name: node_exporter
+    state: restarted
+    daemon_reload: true

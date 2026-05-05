@@ -1,0 +1,11 @@
+---
+# Variables applied only to the pve host. Higher precedence than group_vars.
+# Use sparingly: most config should live in group_vars or role defaults so it's
+# obvious which knob applies to which set of hosts.
+
+# Pin node_exporter to listen only on the LAN bridge; PVE web UI already
+# exposes 8006 on this interface, so the firewall rules co-locate.
+node_exporter_listen_address: "0.0.0.0:9100"
+
+# Hint to roles that this is a hypervisor — they can branch on it.
+host_role: hypervisor

@@ -1,0 +1,14 @@
+---
+# Variables applied to EVERY host. These are the lowest-effort knobs to
+# tweak across the fleet. Override on a smaller scope (group_vars/<group>.yml,
+# host_vars/<host>.yml) when you need divergence.
+
+# Where role-installed binaries live. Keeps /usr/bin clean.
+local_bin: /usr/local/bin
+
+# Default timezone — set on every managed host so logs/cron align.
+system_timezone: America/New_York
+
+# Tag every Ansible-managed file with this header so a human reading
+# /etc/foo knows it's reconciled by playbook, not hand-edited.
+managed_marker: "# Managed by Ansible — edits will be overwritten. Source: ~/lab/proxmox/ansible"

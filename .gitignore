@@ -1,0 +1,30 @@
+# --- secrets / runtime state ---
+data/
+*.vault_pass
+.env
+.env.local
+
+# --- node / svelte ---
+node_modules/
+.svelte-kit/
+build/
+dist/
+*.tsbuildinfo
+
+# --- python ---
+__pycache__/
+*.pyc
+
+# --- ansible ---
+ansible/.ansible_facts/
+ansible/inventory.yml
+*.retry
+
+# --- editor / OS ---
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# --- claude ---
+.claude/

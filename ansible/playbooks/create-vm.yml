@@ -1,0 +1,151 @@
+---
+# Create one or more PVE VMs by driving `qm` over SSH on the host.
+#
+# Why qm-via-ssh and not the `community.general.proxmox_kvm` module:
+#   - That module needs a Proxmox API token, and we haven't provisioned one
+#     yet (CLAUDE.md decision #1's terraform@pve!iac token). Using `qm` lets
+#     us start spinning VMs today and migrate to the API module later.
+#   - When we do migrate, only the `Create the VM` task body changes. The
+#     vars/loop structure stays the same.
+#
+# Convention enforced by this playbook:
+#   - Each guest's VMID equals the last octet of its static IPv4 address.
+#     (vmid 204 -> 10.1.10.204). The static IP is set inside the guest
+#     during install, not by this playbook.
+#
+# Usage:
+#   ansible-playbook playbooks/create-vm.yml --check --diff   # dry-run
+#   ansible-playbook playbooks/create-vm.yml                  # apply
+#
+# After it finishes:
+#   1. Open PVE web UI -> <vmid> -> Console -> finish the Ubuntu install
+#   2. During Ubuntu installer's network step, set:
+#        addr: 10.1.10.<vmid>/24, gw: 10.1.10.1, dns: 1.1.1.1, 8.8.8.8
+#   3. Install openssh-server during the install (toggle in the installer)
+#   4. Once SSH-reachable, add the host to ansible/inventory.yml so future
+#      playbooks (node_exporter, patch, etc.) include it.
+
+- name: Create PVE VMs
+  hosts: pve
+  become: true
+  gather_facts: false
+
+  vars:
+    # Add more entries here to provision more VMs in one run. Each one
+    # is created by the loop below; the playbook is idempotent on vmid.
+    vms_to_create:
+      - vmid: 204
+        name: ubuntu-test
+        cores: 2
+        memory_mb: 4096
+        bridge: vmbr0
+        disk_size_gb: 20
+        target_storage: local-lvm
+        iso: "local:iso/ubuntu-24.04.4-live-server-amd64.iso"
+        # The expected post-install static IP — informational here; install
+        # operator types this into the Ubuntu installer.
+        expected_ip: "10.1.10.204"
+
+  tasks:
+    - name: Probe whether VM already exists
+      ansible.builtin.command:
+        cmd: "qm status {{ item.vmid }}"
+      register: vm_status
+      failed_when: false
+      changed_when: false
+      loop: "{{ vms_to_create }}"
+      loop_control:
+        label: "{{ item.vmid }} ({{ item.name }})"
+
+    - name: Build per-VM exists/missing map
+      ansible.builtin.set_fact:
+        vm_exists: "{{ vm_exists | default({}) | combine({item.item.vmid: item.rc == 0}) }}"
+      loop: "{{ vm_status.results }}"
+      loop_control:
+        label: "{{ item.item.vmid }}"
+
+    - name: Show what we will (or won't) create
+      ansible.builtin.debug:
+        msg: >-
+          VMID {{ item.vmid }} ({{ item.name }}) -> {{
+            'EXISTS, skipping' if vm_exists[item.vmid] else 'will create'
+          }}
+      loop: "{{ vms_to_create }}"
+      loop_control:
+        label: "{{ item.vmid }}"
+
+    # --- Create the VM (one task; multi-line `qm create` for readability) ---
+    - name: Create VM with hardware defaults
+      ansible.builtin.command:
+        cmd: >-
+          qm create {{ item.vmid }}
+            --name {{ item.name }}
+            --cores {{ item.cores }}
+            --sockets 1
+            --memory {{ item.memory_mb }}
+            --net0 virtio,bridge={{ item.bridge }},firewall=1
+            --ostype l26
+            --scsihw virtio-scsi-single
+            --bios seabios
+            --machine q35
+            --agent enabled=1
+      loop: "{{ vms_to_create }}"
+      loop_control:
+        label: "{{ item.vmid }} ({{ item.name }})"
+      when: not vm_exists[item.vmid]
+
+    # --- Attach an empty OS disk on local-lvm (discard + ssd from day one) ---
+    - name: Attach OS disk
+      ansible.builtin.command:
+        cmd: >-
+          qm set {{ item.vmid }}
+            --scsi0 {{ item.target_storage }}:{{ item.disk_size_gb }},iothread=1,discard=on,ssd=1
+      loop: "{{ vms_to_create }}"
+      loop_control:
+        label: "{{ item.vmid }}"
+      when: not vm_exists[item.vmid]
+
+    # --- Attach the install ISO as a CD on ide2 ---
+    - name: Attach install ISO
+      ansible.builtin.command:
+        cmd: >-
+          qm set {{ item.vmid }} --ide2 {{ item.iso }},media=cdrom
+      loop: "{{ vms_to_create }}"
+      loop_control:
+        label: "{{ item.vmid }}"
+      when: not vm_exists[item.vmid]
+
+    # --- Boot order: try ISO first (so installer comes up), then disk, then PXE ---
+    - name: Set boot order
+      ansible.builtin.command:
+        cmd: >-
+          qm set {{ item.vmid }} --boot order='ide2;scsi0;net0'
+      loop: "{{ vms_to_create }}"
+      loop_control:
+        label: "{{ item.vmid }}"
+      when: not vm_exists[item.vmid]
+
+    # --- Confirm result ---
+    - name: Read final config
+      ansible.builtin.command:
+        cmd: "qm config {{ item.vmid }}"
+      register: final_config
+      changed_when: false
+      loop: "{{ vms_to_create }}"
+      loop_control:
+        label: "{{ item.vmid }}"
+
+    - name: Show config + next steps
+      ansible.builtin.debug:
+        msg: |
+          VM {{ item.item.vmid }} ({{ item.item.name }}):
+          {{ item.stdout }}
+          ---
+          Next: PVE web UI -> {{ item.item.vmid }} -> Console (noVNC).
+            - Run installer.
+            - Network step: addr={{ item.item.expected_ip }}/24 gw=10.1.10.1 dns="1.1.1.1 8.8.8.8"
+            - Install openssh-server.
+          Then add to ansible/inventory.yml.
+      loop: "{{ final_config.results }}"
+      loop_control:
+        label: "{{ item.item.vmid }}"

@@ -1,0 +1,13 @@
+---
+# Collections we use (Galaxy). Install with:
+#   ansible-galaxy install -r requirements.yml
+collections:
+  - name: ansible.posix
+    version: ">=1.5.0"
+  - name: community.general
+    version: ">=8.0.0"
+  - name: ansible.utils
+    version: ">=4.0.0"
+
+# No external Galaxy roles for now — all roles live in roles/ in this repo.
+roles: []

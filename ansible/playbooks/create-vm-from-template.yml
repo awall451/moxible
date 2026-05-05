@@ -1,0 +1,289 @@
+---
+# Clone the Ubuntu cloud-init template (built by build-cloud-template.yml)
+# into one or more new VMs and apply per-VM cloud-init: hostname, static IP,
+# user, SSH key, package install, dotfiles bootstrap. Boots ready to SSH in
+# ~30-60s — no installer screen.
+#
+# Convention enforced:
+#   vmid 100..254 -> last octet of static IP. Set the vmid; the playbook
+#   derives the IP automatically.
+#
+# Auto-VMID:
+#   If a vms_to_clone entry omits `vmid`, the playbook fills it from
+#   `pvesh get /cluster/nextid`. For multiple unspecified entries it
+#   increments sequentially. Means you never type a vmid for routine VMs.
+#
+# Dotfiles bootstrap:
+#   First-boot cloud-init clones {{ dotfiles_url }} into ~/dotfiles and
+#   runs ./install.sh. Idempotent on re-runs (per the dotfiles README).
+#
+# Usage:
+#   # Spin up the next available VMID with name "ubuntu-test":
+#   ansible-playbook playbooks/create-vm-from-template.yml
+#
+#   # Override on the command line:
+#   ansible-playbook playbooks/create-vm-from-template.yml -e new_vm_name=app1
+
+- name: Clone cloud-init VMs from template
+  hosts: pve
+  become: true
+  gather_facts: false
+
+  vars:
+    template_vmid: 9000
+    storage: "local-lvm"
+    snippets_storage: "local"
+    snippets_dir: "/var/lib/vz/snippets"
+    network_cidr_prefix: 24
+    network_gateway: "10.1.10.1"
+    network_subnet_prefix: "10.1.10"
+    nameservers: "1.1.1.1 8.8.8.8"
+
+    cloud_user: "dillon"
+    ssh_pubkey_local_path: "~/.ssh/id_ed25519_pve.pub"
+    ssh_pubkey_remote_path: "/tmp/cloudinit-ssh.pub"
+
+    # First-boot dotfiles bootstrap. Clones into ~/dotfiles as cloud_user,
+    # then runs the repo's idempotent install.sh.
+    dotfiles_url: "https://github.com/awall451/dotfiles.git"
+
+    # Single-VM defaults (override with -e new_vm_name=foo etc.).
+    new_vm_name: "ubuntu-test"
+    new_vm_cores: 2
+    new_vm_memory_mb: 4096
+    new_vm_disk_size_gb: 20
+
+    # Multi-VM list. If empty, the playbook builds a one-element list from
+    # the new_vm_* vars above (the default flow). Each entry may omit `vmid`
+    # to opt into auto-assignment.
+    vms_to_clone: []
+
+  tasks:
+
+    # ---- 0. Sanity: template must exist ------------------------------------
+    - name: Confirm template VMID {{ template_vmid }} exists
+      ansible.builtin.command:
+        cmd: "qm status {{ template_vmid }}"
+      register: tpl_check
+      changed_when: false
+      failed_when: tpl_check.rc != 0
+
+    # ---- 1. Make sure local storage allows cloud-init snippets -------------
+    - name: Read storage config for {{ snippets_storage }}
+      ansible.builtin.command:
+        cmd: "pvesh get /storage/{{ snippets_storage }} --output-format json"
+      register: snippet_storage_cfg
+      changed_when: false
+
+    - name: Ensure 'snippets' content type is enabled on {{ snippets_storage }}
+      ansible.builtin.command:
+        cmd: 'pvesm set {{ snippets_storage }} --content "iso,vztmpl,backup,snippets"'
+      when: "'snippets' not in snippet_storage_cfg.stdout"
+      changed_when: true
+
+    - name: Ensure snippets dir exists
+      ansible.builtin.file:
+        path: "{{ snippets_dir }}"
+        state: directory
+        mode: "0755"
+
+    # ---- 2. Resolve VMIDs (auto-assign from pvesh nextid where omitted) ----
+    - name: Build effective VM list (single-VM default if vms_to_clone empty)
+      ansible.builtin.set_fact:
+        effective_vms: "{{ vms_to_clone if (vms_to_clone | length > 0) else
+                            [{'name': new_vm_name,
+                              'cores': new_vm_cores,
+                              'memory_mb': new_vm_memory_mb,
+                              'disk_size_gb': new_vm_disk_size_gb,
+                              'full_clone': true}] }}"
+
+    # We want VMIDs in the 200..254 range so the IP convention holds
+    # (10.1.10.<vmid>). PVE's `pvesh get /cluster/nextid` only starts at 100,
+    # so we scan our preferred range manually.
+    - name: Find next free VMID in 200..254
+      ansible.builtin.shell: |
+        set -e
+        for i in $(seq 200 254); do
+          if ! qm status $i >/dev/null 2>&1 && ! pct status $i >/dev/null 2>&1; then
+            echo $i
+            exit 0
+          fi
+        done
+        echo "no free VMID in 200..254" >&2
+        exit 1
+      register: nextid_result
+      changed_when: false
+
+    - name: Resolve VMIDs (sequential auto-assign for entries without vmid)
+      ansible.builtin.set_fact:
+        vms_resolved: |-
+          {%- set ns = namespace(next=nextid_result.stdout | int, out=[]) -%}
+          {%- for v in effective_vms -%}
+          {%-   if v.vmid is defined -%}
+          {%-     set _ = ns.out.append(v) -%}
+          {%-   else -%}
+          {%-     set _ = ns.out.append(v | combine({'vmid': ns.next})) -%}
+          {%-     set ns.next = ns.next + 1 -%}
+          {%-   endif -%}
+          {%- endfor -%}
+          {{ ns.out }}
+
+    - name: Coerce vms_resolved to a real list
+      ansible.builtin.set_fact:
+        vms_resolved: "{{ vms_resolved | from_yaml if vms_resolved is string else vms_resolved }}"
+
+    - name: Show planned VMs
+      ansible.builtin.debug:
+        msg: >-
+          VMID {{ item.vmid }} -> {{ network_subnet_prefix }}.{{ item.vmid }}
+          name={{ item.name }} cores={{ item.cores }} mem={{ item.memory_mb }}
+          disk={{ item.disk_size_gb }}G full_clone={{ item.full_clone | default(true) }}
+      loop: "{{ vms_resolved }}"
+      loop_control:
+        label: "{{ item.vmid }}"
+
+    # ---- 3. Push the SSH public key from workstation to pve ----------------
+    - name: Read local SSH public key
+      ansible.builtin.slurp:
+        src: "{{ ssh_pubkey_local_path }}"
+      register: pubkey_blob
+      delegate_to: localhost
+      become: false
+      check_mode: false
+
+    - name: Write SSH public key on pve
+      ansible.builtin.copy:
+        content: "{{ pubkey_blob.content | b64decode }}"
+        dest: "{{ ssh_pubkey_remote_path }}"
+        mode: "0644"
+
+    # ---- 4. Probe each resolved VMID for existence -------------------------
+    - name: Probe target VMIDs
+      ansible.builtin.command:
+        cmd: "qm status {{ item.vmid }}"
+      register: clone_probe
+      failed_when: false
+      changed_when: false
+      loop: "{{ vms_resolved }}"
+      loop_control:
+        label: "{{ item.vmid }}"
+
+    - name: Build vmid -> exists map
+      ansible.builtin.set_fact:
+        vm_exists: "{{ vm_exists | default({}) | combine({item.item.vmid: item.rc == 0}) }}"
+      loop: "{{ clone_probe.results }}"
+      loop_control:
+        label: "{{ item.item.vmid }}"
+
+    # ---- 5. Render per-VM cloud-init userdata snippet ---------------------
+    - name: Render cloud-init userdata
+      ansible.builtin.template:
+        src: cloudinit-userdata.yaml.j2
+        dest: "{{ snippets_dir }}/cloudinit-vmid-{{ item.vmid }}.yaml"
+        mode: "0644"
+      loop: "{{ vms_resolved }}"
+      loop_control:
+        label: "{{ item.vmid }}"
+      when: not vm_exists[item.vmid]
+
+    # ---- 6. Clone the template --------------------------------------------
+    - name: Clone template -> new VMID
+      ansible.builtin.command:
+        cmd: >-
+          qm clone {{ template_vmid }} {{ item.vmid }}
+            --name {{ item.name }}
+            --full {{ '1' if item.full_clone | default(true) else '0' }}
+      loop: "{{ vms_resolved }}"
+      loop_control:
+        label: "{{ item.vmid }}"
+      when: not vm_exists[item.vmid]
+
+    - name: Resize OS disk to requested size
+      ansible.builtin.command:
+        cmd: "qm resize {{ item.vmid }} scsi0 {{ item.disk_size_gb }}G"
+      loop: "{{ vms_resolved }}"
+      loop_control:
+        label: "{{ item.vmid }}"
+      when: not vm_exists[item.vmid]
+      register: resize_result
+      failed_when:
+        - resize_result.rc is defined
+        - resize_result.rc != 0
+        - "'cannot shrink disk size' not in (resize_result.stderr | default(''))"
+
+    # ---- 7. Apply cloud-init settings + cicustom snippet ------------------
+    - name: Set CPU + memory
+      ansible.builtin.command:
+        cmd: "qm set {{ item.vmid }} --cores {{ item.cores }} --memory {{ item.memory_mb }}"
+      loop: "{{ vms_resolved }}"
+      loop_control:
+        label: "{{ item.vmid }}"
+      when: not vm_exists[item.vmid]
+
+    - name: Set static IP via cloud-init
+      ansible.builtin.command:
+        cmd: >-
+          qm set {{ item.vmid }}
+          --ipconfig0 ip={{ network_subnet_prefix }}.{{ item.vmid }}/{{ network_cidr_prefix }},gw={{ network_gateway }}
+      loop: "{{ vms_resolved }}"
+      loop_control:
+        label: "{{ item.vmid }}"
+      when: not vm_exists[item.vmid]
+
+    - name: Set DNS via cloud-init
+      ansible.builtin.command:
+        cmd: 'qm set {{ item.vmid }} --nameserver "{{ nameservers }}"'
+      loop: "{{ vms_resolved }}"
+      loop_control:
+        label: "{{ item.vmid }}"
+      when: not vm_exists[item.vmid]
+
+    - name: Set cloud-init user + SSH key
+      ansible.builtin.command:
+        cmd: >-
+          qm set {{ item.vmid }} --ciuser {{ cloud_user }} --sshkeys {{ ssh_pubkey_remote_path }}
+      loop: "{{ vms_resolved }}"
+      loop_control:
+        label: "{{ item.vmid }}"
+      when: not vm_exists[item.vmid]
+
+    - name: Wire cicustom vendor-data snippet
+      ansible.builtin.command:
+        cmd: >-
+          qm set {{ item.vmid }} --cicustom "vendor={{ snippets_storage }}:snippets/cloudinit-vmid-{{ item.vmid }}.yaml"
+      loop: "{{ vms_resolved }}"
+      loop_control:
+        label: "{{ item.vmid }}"
+      when: not vm_exists[item.vmid]
+
+    - name: Tag the VM
+      ansible.builtin.command:
+        cmd: "qm set {{ item.vmid }} --tags 'cloudinit;ubuntu;managed-by-ansible'"
+      loop: "{{ vms_resolved }}"
+      loop_control:
+        label: "{{ item.vmid }}"
+      when: not vm_exists[item.vmid]
+
+    # ---- 8. Boot ----------------------------------------------------------
+    - name: Start VM
+      ansible.builtin.command:
+        cmd: "qm start {{ item.vmid }}"
+      loop: "{{ vms_resolved }}"
+      loop_control:
+        label: "{{ item.vmid }}"
+      when: not vm_exists[item.vmid]
+
+    # ---- 9. Show next-step info -------------------------------------------
+    - name: Show next steps
+      ansible.builtin.debug:
+        msg: |
+          VM {{ item.vmid }} ({{ item.name }}) provisioned.
+          IP:    {{ network_subnet_prefix }}.{{ item.vmid }}
+          SSH:   ssh {{ cloud_user }}@{{ network_subnet_prefix }}.{{ item.vmid }}
+          Cloud-init runs on first boot (~60-180s including dotfiles install).
+          Watch progress on pve:
+            qm terminal {{ item.vmid }}
+          or in the PVE UI -> {{ item.vmid }} -> Console.
+      loop: "{{ vms_resolved }}"
+      loop_control:
+        label: "{{ item.vmid }}"

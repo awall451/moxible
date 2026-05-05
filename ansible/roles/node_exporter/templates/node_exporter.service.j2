@@ -1,0 +1,35 @@
+{{ managed_marker | default("# Managed by Ansible") }}
+[Unit]
+Description=Prometheus Node Exporter
+Documentation=https://github.com/prometheus/node_exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User={{ node_exporter_user }}
+Group={{ node_exporter_group }}
+ExecStart={{ node_exporter_binary }} \
+  --web.listen-address={{ node_exporter_listen_address }} \
+  --collector.textfile.directory={{ node_exporter_textfile_dir }} \
+  {{ node_exporter_extra_args }}
+
+# Hardening — least privilege.
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+PrivateTmp=true
+ReadWritePaths={{ node_exporter_textfile_dir }}
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

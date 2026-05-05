@@ -1,0 +1,100 @@
+---
+# Read this top-to-bottom: it's the canonical shape of an Ansible role.
+# Every task should be idempotent. The role re-runs cheaply when nothing has
+# changed.
+
+- name: Service user exists
+  ansible.builtin.user:
+    name: "{{ node_exporter_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+    state: present
+  tags: [install, user]
+
+- name: Textfile collector dir exists
+  ansible.builtin.file:
+    path: "{{ node_exporter_textfile_dir }}"
+    state: directory
+    owner: "{{ node_exporter_user }}"
+    group: "{{ node_exporter_group }}"
+    mode: "0755"
+  tags: [install]
+
+# Idempotence trick: read the installed binary's `--version` and only download
+# when it disagrees with `node_exporter_version`. `failed_when: false` keeps
+# this a probe, not a hard fail.
+- name: Detect installed node_exporter version (if any)
+  ansible.builtin.command: "{{ node_exporter_binary }} --version"
+  register: node_exporter_installed_version
+  changed_when: false
+  failed_when: false
+  check_mode: false   # always run this probe, even under --check
+  tags: [install]
+
+- name: Decide whether to (re)install
+  ansible.builtin.set_fact:
+    node_exporter_needs_install: >-
+      {{ node_exporter_installed_version.rc != 0
+         or (node_exporter_version not in node_exporter_installed_version.stdout | default('')) }}
+  tags: [install]
+
+- name: Download node_exporter tarball
+  ansible.builtin.get_url:
+    url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}.tar.gz"
+    dest: "/tmp/node_exporter-{{ node_exporter_version }}.tar.gz"
+    mode: "0644"
+  when: node_exporter_needs_install
+  tags: [install]
+
+- name: Extract node_exporter binary
+  ansible.builtin.unarchive:
+    src: "/tmp/node_exporter-{{ node_exporter_version }}.tar.gz"
+    dest: "/tmp/"
+    remote_src: true
+    extra_opts:
+      - "--strip-components=1"
+      - "--wildcards"
+      - "*/node_exporter"
+  when: node_exporter_needs_install
+  tags: [install]
+
+- name: Install node_exporter binary
+  ansible.builtin.copy:
+    src: "/tmp/node_exporter"
+    dest: "{{ node_exporter_binary }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+  when: node_exporter_needs_install
+  notify: Restart node_exporter
+  tags: [install]
+
+- name: Tidy up the tarball + extracted binary
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/tmp/node_exporter-{{ node_exporter_version }}.tar.gz"
+    - "/tmp/node_exporter"
+  when: node_exporter_needs_install
+  tags: [install]
+
+- name: Render systemd unit
+  ansible.builtin.template:
+    src: node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart node_exporter
+  tags: [install, configure]
+
+- name: Service enabled and started
+  ansible.builtin.systemd_service:
+    name: node_exporter
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [install, configure]

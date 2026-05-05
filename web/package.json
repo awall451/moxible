@@ -1,0 +1,35 @@
+{
+  "name": "proxmox-deployer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev --host 0.0.0.0 --port 4080",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4080",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run",
+    "start": "ORIGIN=${ORIGIN:-http://proxmox-deployer.localhost} node build/index.js"
+  },
+  "dependencies": {
+    "nanoid": "^5.0.9",
+    "pino": "^9.6.0",
+    "sshpk": "^1.18.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-node": "^5.2.12",
+    "@sveltejs/kit": "^2.15.2",
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/node": "^22.10.5",
+    "@types/sshpk": "^1.17.4",
+    "svelte": "^5.16.5",
+    "svelte-check": "^4.1.2",
+    "sveltekit-superforms": "^2.22.1",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7",
+    "vitest": "^2.1.8"
+  }
+}

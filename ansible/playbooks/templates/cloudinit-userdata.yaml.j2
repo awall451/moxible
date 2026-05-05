@@ -1,0 +1,33 @@
+#cloud-config
+# Rendered for VMID {{ item.vmid }} ({{ item.name }}). Wired into PVE as
+# **vendor-data** (qm set --cicustom vendor=...), NOT user-data. Vendor-data
+# is merged with PVE's auto-generated user-data, so the user, SSH key,
+# hostname, and IP set via `qm set --ciuser/--sshkeys/--ipconfig0` are all
+# preserved. Anything in this file is purely additive.
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - qemu-guest-agent          # PVE shows IP/uptime in the UI once this runs
+  - git                       # for dotfiles clone below
+  - zsh                       # dotfiles target shell
+  - curl
+  - ca-certificates
+  - vim
+  - tmux
+  - htop
+  - jq
+  - unzip
+
+# Run AFTER package install. The dotfiles install.sh symlinks tracked files
+# into $HOME and is idempotent (re-runs are safe). Agent enable goes here
+# (not bootcmd) because the binary doesn't exist until packages: completes.
+runcmd:
+  - [ systemctl, enable, --now, qemu-guest-agent ]
+  - [ sudo, -u, "{{ cloud_user }}", -H, bash, -lc,
+      "git clone {{ dotfiles_url }} ~/dotfiles" ]
+  - [ sudo, -u, "{{ cloud_user }}", -H, bash, -lc,
+      "cd ~/dotfiles && ./install.sh" ]
+
+final_message: "VMID {{ item.vmid }} ({{ item.name }}) cloud-init done after $UPTIME seconds."

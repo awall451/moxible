@@ -1,0 +1,22 @@
+---
+# Apply the node_exporter role to every host in the `monitored` group.
+#
+# Dry-run (like `terraform plan`):
+#   ansible-playbook playbooks/node_exporter.yml --check --diff
+#
+# Apply (like `terraform apply`; hook will prompt to confirm):
+#   ansible-playbook playbooks/node_exporter.yml
+#
+# Limit to one host:
+#   ansible-playbook playbooks/node_exporter.yml --limit pve
+#
+# Run only specific tagged tasks (e.g. only the systemd unit re-render):
+#   ansible-playbook playbooks/node_exporter.yml --tags configure
+- name: Install node_exporter on monitored hosts
+  hosts: monitored
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: node_exporter
+      tags: [node_exporter]

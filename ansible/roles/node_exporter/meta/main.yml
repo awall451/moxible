@@ -1,0 +1,20 @@
+---
+galaxy_info:
+  role_name: node_exporter
+  author: dillon
+  description: Install and run Prometheus node_exporter as a systemd service.
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Debian
+      versions: [bullseye, bookworm]
+    - name: Ubuntu
+      versions: [jammy, noble]
+    - name: EL
+      versions: ["8", "9"]
+  galaxy_tags:
+    - monitoring
+    - prometheus
+    - systemd
+
+dependencies: []   # role pulls nothing else; rely on facts gathered by the play
