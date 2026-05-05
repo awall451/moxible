@@ -17,6 +17,9 @@
   become: true
   gather_facts: true
 
+  pre_tasks:
+    - ansible.builtin.import_tasks: ../tasks/load_config.yml
+
   roles:
     - role: node_exporter
       tags: [node_exporter]

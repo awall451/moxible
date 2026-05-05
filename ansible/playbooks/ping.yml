@@ -7,6 +7,9 @@
   hosts: all
   gather_facts: true
 
+  pre_tasks:
+    - ansible.builtin.import_tasks: ../tasks/load_config.yml
+
   tasks:
     - name: Ping
       ansible.builtin.ping:

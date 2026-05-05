@@ -1,0 +1,13 @@
+---
+# Shared pre_task: pull /data/config.yml (wizard-written) into play vars so
+# every playbook sees the same config tree (connection, network, storage,
+# identity, protection, vmid_range, auth).
+#
+# Pre-wizard (file missing) is silently a no-op: the playbooks fall through
+# to their env-var-driven defaults from Phase 1.5.
+- name: Load shared wizard config (no-op if /data/config.yml missing)
+  ansible.builtin.include_vars:
+    file: /data/config.yml
+  failed_when: false
+  no_log: true
+  tags: [always]

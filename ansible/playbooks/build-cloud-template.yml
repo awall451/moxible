@@ -33,6 +33,9 @@
     cloud_image_local: "/var/lib/vz/template/iso/noble-server-cloudimg-amd64.img"
     cloud_image_filename: "noble-server-cloudimg-amd64.img"
 
+  pre_tasks:
+    - ansible.builtin.import_tasks: ../tasks/load_config.yml
+
   tasks:
 
     # ---- 1. Fetch the cloud image and verify its SHA256 ---------------------

@@ -56,6 +56,9 @@
         # operator types this into the Ubuntu installer.
         expected_ip: "{{ network_subnet_prefix }}.204"
 
+  pre_tasks:
+    - ansible.builtin.import_tasks: ../tasks/load_config.yml
+
   tasks:
     - name: Probe whether VM already exists
       ansible.builtin.command:

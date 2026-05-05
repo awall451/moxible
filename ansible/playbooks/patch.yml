@@ -12,6 +12,8 @@
   gather_facts: true
 
   pre_tasks:
+    - ansible.builtin.import_tasks: ../tasks/load_config.yml
+
     - name: Snapshot guest before upgrade (PVE-side)
       delegate_to: pve
       run_once: false

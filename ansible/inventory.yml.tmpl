@@ -1,0 +1,34 @@
+---
+# Template rendered by the first-run wizard (Phase 4) into ansible/inventory.yml
+# from values in /data/config.yml. Do NOT edit the rendered file by hand —
+# re-run the wizard's Save step (or the Settings page) to re-render.
+#
+# Placeholders use jinja2-style {{ var }}; the wizard's renderer fills them
+# from the ConnectionSchema fields in /data/config.yml.
+#
+# Groups defined here:
+#   proxmox_hosts  — the hypervisor itself
+#   monitored      — anywhere we want node_exporter scraped
+#   auto_patch     — opt-in to scheduled apt upgrades + reboots
+#   guests         — populated post-deploy
+all:
+  children:
+    proxmox_hosts:
+      hosts:
+        pve:
+          ansible_host: {{ pve_host }}
+          ansible_user: {{ pve_user }}
+{% if pve_bastion %}
+          ansible_ssh_common_args: "-o ProxyJump={{ pve_bastion }}"
+{% endif %}
+          ansible_ssh_private_key_file: {{ ssh_key_path }}
+
+    monitored:
+      hosts:
+        pve:
+
+    auto_patch:
+      hosts: {}
+
+    guests:
+      hosts: {}

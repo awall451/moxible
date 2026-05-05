@@ -1,4 +1,6 @@
 import type { Handle } from '@sveltejs/kit';
+import { sequence } from '@sveltejs/kit/hooks';
+import { setupGate } from '$lib/server/setupGate';
 
 const ALLOWED = (process.env.ALLOWED_ORIGINS ?? '')
   .split(',')
@@ -23,7 +25,7 @@ function corsHeaders(origin: string): Record<string, string> {
   };
 }
 
-export const handle: Handle = async ({ event, resolve }) => {
+const corsHandle: Handle = async ({ event, resolve }) => {
   const origin = event.request.headers.get('origin');
   const allowed = isAllowed(origin);
 
@@ -37,3 +39,6 @@ export const handle: Handle = async ({ event, resolve }) => {
   }
   return res;
 };
+
+// Phase 5 will insert authHandle between setupGate and corsHandle.
+export const handle = sequence(setupGate, corsHandle);

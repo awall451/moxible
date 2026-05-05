@@ -23,6 +23,9 @@
       {{ (lookup('env', 'CRITICAL_VMIDS') | default('', true)).split(',')
          | map('trim') | reject('equalto', '') | map('int') | list }}
 
+  pre_tasks:
+    - ansible.builtin.import_tasks: ../tasks/load_config.yml
+
   tasks:
     - name: Sanity — at least one VMID requested
       ansible.builtin.assert:

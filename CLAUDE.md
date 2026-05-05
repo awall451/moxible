@@ -136,7 +136,7 @@ Tracked in the task list (use `TaskList` to see current state):
 |---|---|---|
 | 1 | done | Skeleton: copy ansible/ + web/, LICENSE, README, CLAUDE.md, .gitignore, init git |
 | 1.5 | done | Mechanical extraction: every ⚠ replaced with env-var fallback. CLI works with `PVE_HOST=… ansible-playbook …`. Container starts without host `~/.ssh`. |
-| 2 | pending | Shared config: zod schema, `web/src/lib/server/config.ts` loader, `setupGate.ts`, `ansible/group_vars/all.yml` `vars_files`, `inventory.yml.tmpl` |
+| 2 | done | Shared config: zod schema (`web/src/lib/schemas/config.ts`), loader (`web/src/lib/server/config.ts`), `setupGate.ts` wired through `hooks.server.ts`, `ansible/inventory.yml.tmpl`, shared `ansible/tasks/load_config.yml` pulled into every playbook's `pre_tasks` (used `include_vars` not `vars_files` — the latter is play-level only and hard-fails if `/data/config.yml` is missing). Stub `routes/setup/+page.svelte` so the gate's redirect resolves. Pre-wizard CLI still works via env-var fallbacks. |
 | 3 | pending | Wizard backend: `keygen.ts`, `pveProbe.ts`, `api/setup/{probe,keygen,save}/+server.ts` |
 | 4 | pending | Wizard frontend: `routes/setup/{connection,network,storage,template,identity,protection,auth,review}/`, shared draft state |
 | 5 | pending | Auth modes (none / shared_token / basic), argon2id hashing, hooks.server.ts chain |
