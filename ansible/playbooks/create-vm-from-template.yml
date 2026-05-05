@@ -30,22 +30,25 @@
   gather_facts: false
 
   vars:
-    template_vmid: 9000
-    storage: "local-lvm"
-    snippets_storage: "local"
+    # Phase 1.5: defaults read from env vars so the CLI works before the
+    # first-run wizard ships /data/config.yml. Override with -e on the
+    # command line, or via the wizard once Phase 2+ lands.
+    template_vmid: "{{ lookup('env', 'TEMPLATE_VMID') | default('9000', true) | int }}"
+    storage: "{{ lookup('env', 'VM_STORAGE') | default('local-lvm', true) }}"
+    snippets_storage: "{{ lookup('env', 'SNIPPETS_STORAGE') | default('local', true) }}"
     snippets_dir: "/var/lib/vz/snippets"
-    network_cidr_prefix: 24
-    network_gateway: "10.1.10.1"
-    network_subnet_prefix: "10.1.10"
-    nameservers: "1.1.1.1 8.8.8.8"
+    network_cidr_prefix: "{{ lookup('env', 'CIDR_PREFIX') | default('24', true) | int }}"
+    network_gateway: "{{ lookup('env', 'NETWORK_GATEWAY') | default('192.0.2.1', true) }}"
+    network_subnet_prefix: "{{ lookup('env', 'SUBNET_PREFIX') | default('192.0.2', true) }}"
+    nameservers: "{{ lookup('env', 'DNS_SERVERS') | default('1.1.1.1 8.8.8.8', true) }}"
 
-    cloud_user: "dillon"
-    ssh_pubkey_local_path: "~/.ssh/id_ed25519_pve.pub"
+    cloud_user: "{{ lookup('env', 'CLOUD_USER') | default('admin', true) }}"
+    ssh_pubkey_local_path: "{{ lookup('env', 'DEFAULT_PUBKEY_PATH') | default('/data/keys/id_ed25519_pve.pub', true) }}"
     ssh_pubkey_remote_path: "/tmp/cloudinit-ssh.pub"
 
     # First-boot dotfiles bootstrap. Clones into ~/dotfiles as cloud_user,
-    # then runs the repo's idempotent install.sh.
-    dotfiles_url: "https://github.com/awall451/dotfiles.git"
+    # then runs the repo's idempotent install.sh. Empty string = skip.
+    dotfiles_url: "{{ lookup('env', 'DOTFILES_URL') | default('', true) }}"
 
     # Single-VM defaults (override with -e new_vm_name=foo etc.).
     new_vm_name: "ubuntu-test"
@@ -98,8 +101,8 @@
                               'full_clone': true}] }}"
 
     # We want VMIDs in the 200..254 range so the IP convention holds
-    # (10.1.10.<vmid>). PVE's `pvesh get /cluster/nextid` only starts at 100,
-    # so we scan our preferred range manually.
+    # (<subnet_prefix>.<vmid>). PVE's `pvesh get /cluster/nextid` only starts
+    # at 100, so we scan our preferred range manually.
     - name: Find next free VMID in 200..254
       ansible.builtin.shell: |
         set -e

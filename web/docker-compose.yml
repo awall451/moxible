@@ -1,35 +1,46 @@
 services:
-  proxmox-deployer:
-    container_name: proxmox-deployer
+  moxible:
+    container_name: moxible
     build:
-      context: .
-      dockerfile: Dockerfile
-    image: proxmox-deployer:latest
+      context: ..
+      dockerfile: web/Dockerfile
+    image: moxible:latest
     ports:
       - "4080:4080"
     volumes:
-      - ${HOME}/.ssh:/mnt/ssh-ro:ro
-      - ${REPO_ROOT:-../..}:/repo:ro
+      # Single bind mount. Wizard writes /data/config.yml + /data/keys/ here.
+      # NEVER mount the host's ~/.ssh — the container generates its own key.
       - ./data:/data
     environment:
       NODE_ENV: production
       PORT: 4080
       HOST: 0.0.0.0
       BIND_ADDR: 0.0.0.0
-      ORIGIN: http://proxmox-deployer.localhost
-      ALLOWED_ORIGINS: http://proxmox-deployer.localhost,http://localhost:4080
-      REPO_ROOT: /repo
+      ORIGIN: http://localhost:4080
+      ALLOWED_ORIGINS: http://localhost:4080
+      ANSIBLE_DIR: /repo/ansible
+      DATA_DIR: /data
+      KEYS_DIR: /data/keys
       ARTIFACTS_DIR: /data/runs
       ANSIBLE_CONFIG: /repo/ansible/ansible.cfg
       ANSIBLE_CALLBACK_PLUGINS: /app/ansible-callbacks
       ANSIBLE_COLLECTIONS_PATH: /usr/share/ansible/collections
-      PVE_HOST: 10.1.10.150
-      PVE_BASTION: argonpi
-      PVE_USER: root
-      SSH_KEY_PATH: /root/.ssh/id_ed25519_pve
-      DEFAULT_PUBKEY_PATH: /root/.ssh/id_ed25519_pve.pub
-      CLOUD_USER: dillon
+      # Phase 1.5 fallback knobs (the wizard replaces these in Phase 2+).
+      # Leave unset to use defaults baked into runner.ts / the playbooks.
+      # PVE_HOST: 192.0.2.10
+      # PVE_USER: root
+      # PVE_BASTION: ""
+      # SSH_KEY_PATH: /data/keys/id_ed25519_pve
+      # DEFAULT_PUBKEY_PATH: /data/keys/id_ed25519_pve.pub
+      # CLOUD_USER: admin
+      # SUBNET_PREFIX: 192.0.2
+      # NETWORK_GATEWAY: 192.0.2.1
+      # CIDR_PREFIX: "24"
+      # DNS_SERVERS: "1.1.1.1 8.8.8.8"
+      # NETWORK_BRIDGE: vmbr0
+      # VM_STORAGE: local-lvm
+      # SNIPPETS_STORAGE: local
+      # TEMPLATE_VMID: "9000"
+      # CRITICAL_VMIDS: ""
+      # DOTFILES_URL: ""
     restart: unless-stopped
-    labels:
-      gantry.enable: "true"
-      gantry.subdomain: "proxmox-deployer"

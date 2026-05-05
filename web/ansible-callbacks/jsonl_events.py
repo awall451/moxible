@@ -32,14 +32,25 @@ def _ts() -> int:
     return int(time.time() * 1000)
 
 
-def _ssh_config_snippet(name: str, ip: str, user: str = "dillon") -> str:
-    return (
-        f"Host {name}\n"
-        f"    HostName {ip}\n"
-        f"    User {user}\n"
-        f"    IdentityFile ~/.ssh/id_ed25519_pve\n"
-        f"    ProxyJump argonpi\n"
-    )
+def _ssh_config_snippet(name: str, ip: str, user: str | None = None) -> str:
+    user = user or os.environ.get("CLOUD_USER", "admin")
+    identity_file = os.environ.get("DEFAULT_IDENTITY_FILE", "~/.ssh/id_ed25519")
+    bastion = os.environ.get("PVE_BASTION", "")
+    lines = [
+        f"Host {name}",
+        f"    HostName {ip}",
+        f"    User {user}",
+        f"    IdentityFile {identity_file}",
+    ]
+    if bastion:
+        lines.append(f"    ProxyJump {bastion}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _ssh_command(ip: str) -> str:
+    user = os.environ.get("CLOUD_USER", "admin")
+    return f"ssh {user}@{ip}"
 
 
 class CallbackModule(CallbackBase):
@@ -133,7 +144,7 @@ class CallbackModule(CallbackBase):
                     'name': name,
                     'ip': ip,
                     'sshConfigSnippet': _ssh_config_snippet(name, ip),
-                    'sshCommand': f"ssh dillon@{ip}",
+                    'sshCommand': _ssh_command(ip),
                 })
 
     def v2_runner_item_on_ok(self, result):
@@ -169,7 +180,7 @@ class CallbackModule(CallbackBase):
                     'name': name,
                     'ip': ip,
                     'sshConfigSnippet': _ssh_config_snippet(name, ip),
-                    'sshCommand': f"ssh dillon@{ip}",
+                    'sshCommand': _ssh_command(ip),
                 })
 
     def v2_runner_item_on_failed(self, result):

@@ -72,7 +72,7 @@
       <span class="text-zinc-500 ml-3">●</span> taken
       <span class="text-red-400 ml-3">●</span> critical
       {#if value != null}
-        <span class="ml-3">selected: <span class="mono text-cyan-400">{value}</span> · ip 10.1.10.{value}</span>
+        <span class="ml-3">selected: <span class="mono text-cyan-400">{value}</span></span>
       {/if}
     </div>
   {/if}

@@ -1,11 +1,18 @@
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
-export const REPO_ROOT = process.env.REPO_ROOT ?? '/repo';
-export const ARTIFACTS_DIR = process.env.ARTIFACTS_DIR ?? '/data/runs';
-export const ANSIBLE_DIR = join(REPO_ROOT, 'ansible');
+// The repo's ansible/ tree is baked into the image at /repo/ansible by the
+// Dockerfile. ANSIBLE_DIR can override for dev (e.g. point at the host repo).
+export const ANSIBLE_DIR = process.env.ANSIBLE_DIR ?? '/repo/ansible';
 export const PLAYBOOKS_DIR = join(ANSIBLE_DIR, 'playbooks');
-export const CRITICAL_VMID_FILE = join(REPO_ROOT, '.claude', '.critical-vmid');
+
+// Wizard artifacts live under DATA_DIR (bind-mounted to ./data on host).
+export const DATA_DIR = process.env.DATA_DIR ?? '/data';
+export const KEYS_DIR = process.env.KEYS_DIR ?? join(DATA_DIR, 'keys');
+export const CONFIG_PATH = process.env.CONFIG_PATH ?? join(DATA_DIR, 'config.yml');
+
+export const ARTIFACTS_DIR = process.env.ARTIFACTS_DIR ?? join(DATA_DIR, 'runs');
+
 export const CALLBACK_PLUGINS_DIR =
   process.env.ANSIBLE_CALLBACK_PLUGINS ?? '/app/ansible-callbacks';
 

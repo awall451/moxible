@@ -77,9 +77,7 @@ ansible/
 │   ├── build-cloud-template.yml          # one-time: build VMID 9000 cloud-init template
 │   ├── create-vm-from-template.yml       # clone template, apply cloud-init, boot ready
 │   ├── patch.yml                         # rolling apt upgrade
-│   ├── pbs.yml                           # deploy Proxmox Backup Server (stub)
-│   ├── jenkins.yml                       # deploy Jenkins LXC (stub)
-│   └── monitoring.yml                    # deploy Prometheus+Grafana stack (stub)
+│   └── destroy-vm.yml                    # graceful stop + qm destroy --purge
 └── roles/
     └── node_exporter/         # reusable role; first end-to-end example
         ├── README.md
@@ -129,11 +127,11 @@ Hook integration: `ansible-playbook --check ...` is auto-allowed by `proxmox-gua
 
 The cloud-init pattern is the right default for any new automation-ready guest. Keep `create-vm.yml` for the cases where you need a graphical or specialized installer (Windows, Rocky, custom distro).
 
-VMID/IP convention: real guests use vmid 100–254 with last-octet IP (`vmid 204 → 10.1.10.204`). Templates and special objects live at vmid 9000+ and have no IP.
+VMID/IP convention: real guests use vmid 200–254 with last-octet IP (`vmid 204 → <subnet_prefix>.204`). Templates and special objects live at vmid 9000+ and have no IP. The subnet prefix is configured via `SUBNET_PREFIX` (Phase 1.5) or the wizard's `network.subnet_prefix` (Phase 2+).
 
 ## Conventions used in this repo
 
-- **All inventory hosts go through SSH config aliases** (`pve`, `argonpi`). Ansible inherits the bastion path automatically. No bastion logic in YAML.
+- **All inventory hosts connect via env vars** (`PVE_HOST`, `PVE_USER`, `PVE_BASTION`, `SSH_KEY_PATH`) in Phase 1.5; the Phase 2+ wizard renders these into `inventory.yml` from `/data/config.yml` instead. Bastion is opt-in: leave `PVE_BASTION` unset for direct connections.
 - **Group membership drives behavior.** A host that joins the `monitored` group gets node_exporter; a host in `auto_patch` gets weekly upgrades. Use groups, not per-host conditionals, where possible.
 - **Roles are the unit of reuse.** If a chunk of YAML is going to be applied to more than one playbook or host, lift it into a role.
 - **Snapshot before mutate.** Playbooks that change live guests open a `qm snapshot` (or `pct snapshot`) named `preupgrade-<iso8601>` before doing destructive work. See `playbooks/patch.yml`.

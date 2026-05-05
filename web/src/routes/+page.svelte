@@ -7,7 +7,8 @@
     <h1 class="text-2xl font-semibold text-zinc-100">Deploy a new VM</h1>
     <p class="text-zinc-400 text-sm mt-1">
       Wraps <span class="mono text-zinc-300">ansible/playbooks/create-vm-from-template.yml</span>.
-      VMID + IP auto-assigned from <span class="mono">10.1.10.200..254</span> unless overridden.
+      VMID auto-assigned from the configured range; IP follows
+      <span class="mono">&lt;subnet_prefix&gt;.&lt;vmid&gt;</span> unless overridden.
     </p>
   </div>
 

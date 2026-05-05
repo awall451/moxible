@@ -39,15 +39,24 @@ export function parseNextStepsMsg(msg: string):
   return { vmid: Number.parseInt(m[1], 10), name: m[2], ip: m[3] };
 }
 
-export function renderSshConfig(name: string, ip: string, user = 'dillon'): string {
-  return [
+export function renderSshConfig(
+  name: string,
+  ip: string,
+  user = process.env.CLOUD_USER ?? 'admin',
+  opts: { identityFile?: string; bastion?: string } = {}
+): string {
+  const identityFile =
+    opts.identityFile ?? process.env.DEFAULT_IDENTITY_FILE ?? '~/.ssh/id_ed25519';
+  const bastion = opts.bastion ?? process.env.PVE_BASTION ?? '';
+  const lines = [
     `Host ${name}`,
     `    HostName ${ip}`,
     `    User ${user}`,
-    `    IdentityFile ~/.ssh/id_ed25519_pve`,
-    `    ProxyJump argonpi`,
-    ''
-  ].join('\n');
+    `    IdentityFile ${identityFile}`
+  ];
+  if (bastion) lines.push(`    ProxyJump ${bastion}`);
+  lines.push('');
+  return lines.join('\n');
 }
 
 export function parseJsonlLine(line: string): AnsibleEvent | null {

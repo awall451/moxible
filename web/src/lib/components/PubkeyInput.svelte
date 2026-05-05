@@ -1,5 +1,8 @@
 <script lang="ts">
-  let { value = $bindable<string>('') }: { value?: string } = $props();
+  let {
+    value = $bindable<string>(''),
+    cloudUser = 'admin'
+  }: { value?: string; cloudUser?: string } = $props();
 
   let fingerprint = $state<string | null>(null);
   let parseError = $state<string | null>(null);
@@ -44,7 +47,7 @@
     <div class="text-xs text-emerald-400 mt-1 mono">{fingerprint}</div>
   {:else}
     <div class="text-xs text-zinc-500 mt-1">
-      paste your public key. it will be added to /home/dillon/.ssh/authorized_keys on the new VM.
+      paste your public key. it will be added to /home/{cloudUser}/.ssh/authorized_keys on the new VM.
     </div>
   {/if}
 </div>

@@ -1,23 +1,25 @@
 #!/usr/bin/env bash
-# Copy mounted ~/.ssh (uid from host, ro) into a writable, root-owned ~/.ssh
-# so ssh + ansible accept it. Strict perms required by openssh.
+# Provision /data on container start. The wizard (Phase 2+) writes config
+# and keys here; the bind mount in docker-compose.yml persists them across
+# container restarts.
+#
+# We never copy the host's ~/.ssh into the container — the wizard generates
+# an ed25519 key in /data/keys/ on first run and that key is what reaches PVE.
 set -euo pipefail
 
-SRC=/mnt/ssh-ro
-DST=/root/.ssh
+DATA_DIR="${DATA_DIR:-/data}"
+KEYS_DIR="${KEYS_DIR:-$DATA_DIR/keys}"
+ARTIFACTS_DIR="${ARTIFACTS_DIR:-$DATA_DIR/runs}"
 
-if [ -d "$SRC" ]; then
-  mkdir -p "$DST"
-  cp -rT "$SRC" "$DST"
-  chown -R root:root "$DST"
-  chmod 700 "$DST"
-  find "$DST" -type f -exec chmod 600 {} \;
-  # public keys + known_hosts can stay 644
-  find "$DST" -type f \( -name '*.pub' -o -name 'known_hosts' -o -name 'config' \) \
-    -exec chmod 600 {} \;
-fi
+mkdir -p "$KEYS_DIR" "$ARTIFACTS_DIR"
+chmod 700 "$KEYS_DIR"
 
-# touch known_hosts so ssh's StrictHostKeyChecking=accept-new can write to it
-[ -f "$DST/known_hosts" ] || { touch "$DST/known_hosts"; chmod 600 "$DST/known_hosts"; }
+# Strict perms on any keys the wizard has already written.
+find "$KEYS_DIR" -maxdepth 1 -type f ! -name '*.pub' -exec chmod 600 {} + 2>/dev/null || true
+find "$KEYS_DIR" -maxdepth 1 -type f -name '*.pub' -exec chmod 644 {} + 2>/dev/null || true
+
+# known_hosts so ssh's StrictHostKeyChecking=accept-new can write to it.
+KNOWN_HOSTS="$KEYS_DIR/known_hosts"
+[ -f "$KNOWN_HOSTS" ] || { touch "$KNOWN_HOSTS"; chmod 600 "$KNOWN_HOSTS"; }
 
 exec "$@"

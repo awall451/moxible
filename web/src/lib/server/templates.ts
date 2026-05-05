@@ -4,6 +4,15 @@ export type Template = {
   default?: boolean;
 };
 
+// Phase 1.5: single hardcoded entry, with VMID controllable via env var.
+// Phase 2+ replaces this with a real `qm list` probe via pveProbe.ts.
+const DEFAULT_TEMPLATE_VMID = Number.parseInt(
+  process.env.TEMPLATE_VMID ?? '9000',
+  10
+);
+
 export async function listTemplates(): Promise<Template[]> {
-  return [{ vmid: 9000, label: 'Ubuntu 24.04 (cloud-init)', default: true }];
+  return [
+    { vmid: DEFAULT_TEMPLATE_VMID, label: 'Ubuntu 24.04 (cloud-init)', default: true }
+  ];
 }

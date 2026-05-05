@@ -11,8 +11,10 @@ import {
 } from './ansibleParser';
 import type { DeployInput } from '$lib/schemas/deploy';
 
-const SUBNET_PREFIX = '10.1.10';
-const CLOUD_USER = process.env.CLOUD_USER ?? 'dillon';
+// Phase 1.5: env-var fallback. The wizard (Phase 2+) loads these from
+// /data/config.yml and renders them through the same env vars to the spawn.
+const SUBNET_PREFIX = process.env.SUBNET_PREFIX ?? '192.0.2';
+const CLOUD_USER = process.env.CLOUD_USER ?? 'admin';
 
 let activeJobId: string | null = null;
 

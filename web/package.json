@@ -1,5 +1,5 @@
 {
-  "name": "proxmox-deployer",
+  "name": "moxible",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
     "preview": "vite preview --host 0.0.0.0 --port 4080",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
-    "start": "ORIGIN=${ORIGIN:-http://proxmox-deployer.localhost} node build/index.js"
+    "start": "ORIGIN=${ORIGIN:-http://localhost:4080} node build/index.js"
   },
   "dependencies": {
     "nanoid": "^5.0.9",

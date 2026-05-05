@@ -20,9 +20,10 @@
   gather_facts: false
 
   vars:
-    template_vmid: 9000
+    template_vmid: "{{ lookup('env', 'TEMPLATE_VMID') | default('9000', true) | int }}"
     template_name: "ubuntu-24.04-cloudinit-tpl"
-    template_storage: "local-lvm"
+    template_storage: "{{ lookup('env', 'VM_STORAGE') | default('local-lvm', true) }}"
+    network_bridge: "{{ lookup('env', 'NETWORK_BRIDGE') | default('vmbr0', true) }}"
 
     # Ubuntu cloud images publish a "current" pointer that always tracks the
     # latest 24.04.x point release. Switch to a pinned URL if you ever need
@@ -96,7 +97,7 @@
             --memory 2048
             --cores 2
             --sockets 1
-            --net0 virtio,bridge=vmbr0,firewall=1
+            --net0 virtio,bridge={{ network_bridge }},firewall=1
             --ostype l26
             --scsihw virtio-scsi-single
             --bios seabios

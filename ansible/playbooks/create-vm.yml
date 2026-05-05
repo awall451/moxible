@@ -9,9 +9,11 @@
 #     vars/loop structure stays the same.
 #
 # Convention enforced by this playbook:
-#   - Each guest's VMID equals the last octet of its static IPv4 address.
-#     (vmid 204 -> 10.1.10.204). The static IP is set inside the guest
-#     during install, not by this playbook.
+#   - Each guest's VMID equals the last octet of its static IPv4 address
+#     (vmid 204 -> <subnet_prefix>.204). Set the SUBNET_PREFIX env var (or
+#     the wizard's network.subnet_prefix once Phase 2+ ships) to control
+#     the prefix. The static IP is set inside the guest during install,
+#     not by this playbook.
 #
 # Usage:
 #   ansible-playbook playbooks/create-vm.yml --check --diff   # dry-run
@@ -20,7 +22,7 @@
 # After it finishes:
 #   1. Open PVE web UI -> <vmid> -> Console -> finish the Ubuntu install
 #   2. During Ubuntu installer's network step, set:
-#        addr: 10.1.10.<vmid>/24, gw: 10.1.10.1, dns: 1.1.1.1, 8.8.8.8
+#        addr: <subnet_prefix>.<vmid>/<cidr_prefix> gw: <network_gateway> dns: <dns_servers>
 #   3. Install openssh-server during the install (toggle in the installer)
 #   4. Once SSH-reachable, add the host to ansible/inventory.yml so future
 #      playbooks (node_exporter, patch, etc.) include it.
@@ -31,6 +33,14 @@
   gather_facts: false
 
   vars:
+    # Phase 1.5: env-var fallback (wizard config takes over Phase 2+).
+    network_subnet_prefix: "{{ lookup('env', 'SUBNET_PREFIX') | default('192.0.2', true) }}"
+    network_cidr_prefix: "{{ lookup('env', 'CIDR_PREFIX') | default('24', true) | int }}"
+    network_gateway: "{{ lookup('env', 'NETWORK_GATEWAY') | default('192.0.2.1', true) }}"
+    nameservers: "{{ lookup('env', 'DNS_SERVERS') | default('1.1.1.1 8.8.8.8', true) }}"
+    network_bridge: "{{ lookup('env', 'NETWORK_BRIDGE') | default('vmbr0', true) }}"
+    vm_storage: "{{ lookup('env', 'VM_STORAGE') | default('local-lvm', true) }}"
+
     # Add more entries here to provision more VMs in one run. Each one
     # is created by the loop below; the playbook is idempotent on vmid.
     vms_to_create:
@@ -38,13 +48,13 @@
         name: ubuntu-test
         cores: 2
         memory_mb: 4096
-        bridge: vmbr0
+        bridge: "{{ network_bridge }}"
         disk_size_gb: 20
-        target_storage: local-lvm
+        target_storage: "{{ vm_storage }}"
         iso: "local:iso/ubuntu-24.04.4-live-server-amd64.iso"
         # The expected post-install static IP — informational here; install
         # operator types this into the Ubuntu installer.
-        expected_ip: "10.1.10.204"
+        expected_ip: "{{ network_subnet_prefix }}.204"
 
   tasks:
     - name: Probe whether VM already exists
@@ -143,7 +153,7 @@
           ---
           Next: PVE web UI -> {{ item.item.vmid }} -> Console (noVNC).
             - Run installer.
-            - Network step: addr={{ item.item.expected_ip }}/24 gw=10.1.10.1 dns="1.1.1.1 8.8.8.8"
+            - Network step: addr={{ item.item.expected_ip }}/{{ network_cidr_prefix }} gw={{ network_gateway }} dns="{{ nameservers }}"
             - Install openssh-server.
           Then add to ansible/inventory.yml.
       loop: "{{ final_config.results }}"

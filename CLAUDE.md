@@ -80,49 +80,53 @@ moxible/
 ├── LICENSE                    # Apache-2.0
 ├── CLAUDE.md                  # this file
 ├── .gitignore
-├── ansible/                   # copied from khazad-dum, NOT YET parameterized
-│   ├── ansible.cfg
+├── ansible/                   # copied from khazad-dum, parameterized in Phase 1.5
+│   ├── ansible.cfg            # ✓ adds roles_path = roles
 │   ├── requirements.yml
-│   ├── inventory.yml          # ⚠ still contains 10.1.10.150, argonpi, dillon's key path
-│   ├── group_vars/all.yml     # ⚠ still references ~/lab/proxmox in managed_marker
-│   ├── host_vars/pve.yml
+│   ├── inventory.yml          # ✓ env-var lookups for PVE_HOST/USER/BASTION/SSH_KEY_PATH
+│   ├── group_vars/all.yml     # ✓ generic managed_marker
+│   ├── host_vars/pve.yml      # ✓ generic
 │   ├── playbooks/
 │   │   ├── ping.yml           # ✓ generic
 │   │   ├── patch.yml          # ✓ generic
 │   │   ├── node_exporter.yml  # ✓ generic
-│   │   ├── destroy-vm.yml     # ⚠ references .claude/.critical-vmid
-│   │   ├── create-vm.yml                  # ⚠ hardcoded 10.1.10.x, vmbr0, local-lvm, dns
-│   │   ├── create-vm-from-template.yml    # ⚠ same + dillon, awall451/dotfiles, vmid 9000
-│   │   ├── build-cloud-template.yml       # ⚠ vmid 9000, local-lvm
-│   │   └── templates/cloudinit-userdata.yaml.j2  # ✓ already uses Jinja vars
-│   ├── roles/node_exporter/    # ✓ generic except meta/main.yml author field
-│   └── README.md
-└── web/                        # copied from khazad-dum/web/deployer/, NOT YET parameterized
-    ├── Dockerfile              # ⚠ env defaults still reference proxmox-deployer.localhost
-    ├── docker-compose.yml      # ⚠ mounts ~/.ssh, has gantry labels, REPO_ROOT, dillon/argonpi defaults
-    ├── docker-entrypoint.sh    # ⚠ still copies host ~/.ssh into /root/.ssh
-    ├── ansible-callbacks/jsonl_events.py  # ⚠ defaults user='dillon'
+│   │   ├── destroy-vm.yml     # ✓ critical_vmids from CRITICAL_VMIDS env (Phase 2+ from config.yml)
+│   │   ├── create-vm.yml                  # ✓ env-var fallback for SUBNET_PREFIX/GATEWAY/BRIDGE/STORAGE
+│   │   ├── create-vm-from-template.yml    # ✓ env-var fallback for all knobs incl. CLOUD_USER, DOTFILES_URL
+│   │   ├── build-cloud-template.yml       # ✓ env-var fallback for TEMPLATE_VMID, VM_STORAGE
+│   │   └── templates/cloudinit-userdata.yaml.j2  # ✓ dotfiles bootstrap conditional on non-empty url
+│   ├── roles/node_exporter/    # ✓ author field generic
+│   └── README.md               # ✓ references SUBNET_PREFIX, env-var connection model
+└── web/                        # copied from khazad-dum/web/deployer/, parameterized in Phase 1.5
+    ├── Dockerfile              # ✓ ANSIBLE_DIR=/repo/ansible (baked), no proxmox-deployer.localhost
+    ├── docker-compose.yml      # ✓ single ./data:/data mount, no host ~/.ssh, no gantry labels
+    ├── docker-entrypoint.sh    # ✓ provisions /data/{keys,runs} only — no host SSH copy
+    ├── ansible-callbacks/jsonl_events.py  # ✓ CLOUD_USER, DEFAULT_IDENTITY_FILE, PVE_BASTION from env
     ├── src/
-    │   ├── hooks.server.ts     # ⚠ ALLOWED_ORIGINS includes proxmox-deployer.localhost
+    │   ├── hooks.server.ts     # ✓ ALLOWED_ORIGINS env-driven; no .localhost hardcoded
     │   ├── lib/
     │   │   ├── server/
-    │   │   │   ├── runner.ts            # ⚠ CLOUD_USER default 'dillon', SUBNET_PREFIX '10.1.10'
-    │   │   │   ├── pveQuery.ts          # ⚠ defaults 10.1.10.150 / argonpi / id_ed25519_pve
-    │   │   │   ├── ansibleParser.ts     # ⚠ hardcoded ProxyJump argonpi, dillon
-    │   │   │   ├── criticalVmids.ts     # ⚠ reads .claude/.critical-vmid
-    │   │   │   ├── paths.ts             # ⚠ ANSIBLE_DIR = $REPO_ROOT/ansible
+    │   │   │   ├── runner.ts            # ✓ SUBNET_PREFIX/CLOUD_USER from env, generic defaults
+    │   │   │   ├── pveQuery.ts          # ✓ env-driven, ProxyJump conditional on PVE_BASTION
+    │   │   │   ├── ansibleParser.ts     # ✓ renderSshConfig takes user/identityFile/bastion opts
+    │   │   │   ├── criticalVmids.ts     # ✓ reads CRITICAL_VMIDS env (Phase 2+ from config.yml)
+    │   │   │   ├── paths.ts             # ✓ ANSIBLE_DIR/DATA_DIR/KEYS_DIR/CONFIG_PATH from env
     │   │   │   ├── jobs.ts              # ✓ generic
     │   │   │   ├── sse.ts               # ✓ generic
-    │   │   │   └── templates.ts         # ⚠ hardcoded ubuntu 24.04 vmid 9000 fallback
-    │   │   ├── schemas/deploy.ts        # ⚠ IP regex hardcoded /^10\.1\.10\.\d+$/
+    │   │   │   └── templates.ts         # ✓ TEMPLATE_VMID env-driven (Phase 3 swaps for qm probe)
+    │   │   ├── schemas/deploy.ts        # ✓ ANY_IP regex; subnet-aware regex lands Phase 2+
     │   │   └── components/
-    │   │       └── PubkeyInput.svelte   # ⚠ UI text says /home/dillon/.ssh/...
-    │   └── routes/             # ✓ generic
+    │   │       ├── DeployForm.svelte    # ✓ generic IP placeholders, dotfiles URL placeholder
+    │   │       ├── PubkeyInput.svelte   # ✓ /home/{cloudUser}/ via prop
+    │   │       └── VmidPicker.svelte    # ✓ no subnet hardcoded in selection display
+    │   └── routes/             # ✓ +page.svelte uses subnet_prefix placeholder
     ├── tests/
-    └── README.md               # ⚠ references dillon's repo path + setup
+    └── README.md               # ✓ moxible-flavored env-var bring-up
 ```
 
-The ⚠ items are everything Phase 1.5 must parameterize. The ✓ items can ship as-is.
+Phase 1.5 complete: every ⚠ replaced with env-var fallback or generic
+default. Phase 2+ swaps these env vars for the wizard-written
+`/data/config.yml` without changing any of the call sites.
 
 ## Phase progress
 
@@ -130,8 +134,8 @@ Tracked in the task list (use `TaskList` to see current state):
 
 | Phase | Status | Description |
 |---|---|---|
-| 1 | **in progress (this session)** | Skeleton: copy ansible/ + web/, LICENSE, README, CLAUDE.md, .gitignore, init git |
-| 1.5 | pending | Mechanical extraction: replace every ⚠ with config-file reads (or env-var fallback before wizard exists). Stops the bleeding from khazad-dum specifics. |
+| 1 | done | Skeleton: copy ansible/ + web/, LICENSE, README, CLAUDE.md, .gitignore, init git |
+| 1.5 | done | Mechanical extraction: every ⚠ replaced with env-var fallback. CLI works with `PVE_HOST=… ansible-playbook …`. Container starts without host `~/.ssh`. |
 | 2 | pending | Shared config: zod schema, `web/src/lib/server/config.ts` loader, `setupGate.ts`, `ansible/group_vars/all.yml` `vars_files`, `inventory.yml.tmpl` |
 | 3 | pending | Wizard backend: `keygen.ts`, `pveProbe.ts`, `api/setup/{probe,keygen,save}/+server.ts` |
 | 4 | pending | Wizard frontend: `routes/setup/{connection,network,storage,template,identity,protection,auth,review}/`, shared draft state |

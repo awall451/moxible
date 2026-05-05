@@ -175,18 +175,18 @@
             <input
               id="ip"
               type="text"
-              placeholder="10.1.10.207"
+              placeholder="e.g. 192.0.2.207"
               class="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 mono text-sm focus:border-cyan-500 focus:outline-none"
               bind:value={ipOverride}
             />
-            <div class="text-xs text-zinc-500 mt-1">defaults to 10.1.10.&lt;vmid&gt;</div>
+            <div class="text-xs text-zinc-500 mt-1">defaults to &lt;subnet_prefix&gt;.&lt;vmid&gt;</div>
           </div>
           <div>
             <label for="gw" class="block text-sm text-zinc-300 mb-1">Gateway override</label>
             <input
               id="gw"
               type="text"
-              placeholder="10.1.10.1"
+              placeholder="e.g. 192.0.2.1"
               class="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 mono text-sm focus:border-cyan-500 focus:outline-none"
               bind:value={gatewayOverride}
             />
@@ -206,7 +206,7 @@
             <input
               id="dotfiles"
               type="url"
-              placeholder="https://github.com/awall451/dotfiles.git"
+              placeholder="https://github.com/you/dotfiles.git"
               class="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 mono text-sm focus:border-cyan-500 focus:outline-none"
               bind:value={dotfilesUrl}
             />

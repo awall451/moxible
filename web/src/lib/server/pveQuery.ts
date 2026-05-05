@@ -1,10 +1,13 @@
 import { spawn } from 'node:child_process';
 import { getCriticalVmids } from './criticalVmids';
 
-const PVE_HOST = process.env.PVE_HOST ?? '10.1.10.150';
-const PVE_BASTION = process.env.PVE_BASTION ?? 'argonpi';
+// Phase 1.5: env-var fallback. Phase 2+ swaps in /data/config.yml values.
+const PVE_HOST = process.env.PVE_HOST ?? '192.0.2.10';
+const PVE_BASTION = process.env.PVE_BASTION ?? '';
 const PVE_USER = process.env.PVE_USER ?? 'root';
-const SSH_KEY_PATH = process.env.SSH_KEY_PATH ?? '/root/.ssh/id_ed25519_pve';
+const SSH_KEY_PATH = process.env.SSH_KEY_PATH ?? '/data/keys/id_ed25519_pve';
+const VMID_RANGE_START = Number.parseInt(process.env.VMID_RANGE_START ?? '200', 10);
+const VMID_RANGE_END = Number.parseInt(process.env.VMID_RANGE_END ?? '254', 10);
 
 export type VmidRow = { vmid: number; name: string; status: string };
 
@@ -29,12 +32,12 @@ function runQmList(): Promise<string> {
       '-o',
       'BatchMode=yes',
       '-o',
-      'StrictHostKeyChecking=accept-new',
-      '-o',
-      `ProxyJump=${PVE_BASTION}`,
-      `${PVE_USER}@${PVE_HOST}`,
-      'qm list'
+      'StrictHostKeyChecking=accept-new'
     ];
+    if (PVE_BASTION) {
+      args.push('-o', `ProxyJump=${PVE_BASTION}`);
+    }
+    args.push(`${PVE_USER}@${PVE_HOST}`, 'qm list');
     const child = spawn('ssh', args, { stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
@@ -68,7 +71,7 @@ export async function getVmidReport(force = false): Promise<VmidReport> {
     return { ...cache.value, stale: false };
   }
 
-  const range: [number, number] = [200, 254];
+  const range: [number, number] = [VMID_RANGE_START, VMID_RANGE_END];
   const critical = new Set(await getCriticalVmids());
 
   try {

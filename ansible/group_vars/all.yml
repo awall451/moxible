@@ -11,4 +11,4 @@ system_timezone: America/New_York
 
 # Tag every Ansible-managed file with this header so a human reading
 # /etc/foo knows it's reconciled by playbook, not hand-edited.
-managed_marker: "# Managed by Ansible — edits will be overwritten. Source: ~/lab/proxmox/ansible"
+managed_marker: "# Managed by Ansible (moxible) — edits will be overwritten."

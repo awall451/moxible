@@ -1,5 +1,9 @@
-import { readFile } from 'node:fs/promises';
-import { CRITICAL_VMID_FILE } from './paths';
+// Phase 1.5: critical VMIDs come from the CRITICAL_VMIDS env var
+// (comma-separated, e.g. "202,210"). Phase 2+ replaces this with a read
+// from /data/config.yml's `protection.critical_vmids` list.
+//
+// Refusing to destroy a critical VMID is enforced both here (UI display)
+// and in ansible/playbooks/destroy-vm.yml (hard failure on the play side).
 
 let cache: { vmids: number[]; loadedAt: number } | null = null;
 const TTL_MS = 60_000;
@@ -7,18 +11,13 @@ const TTL_MS = 60_000;
 export async function getCriticalVmids(): Promise<number[]> {
   const now = Date.now();
   if (cache && now - cache.loadedAt < TTL_MS) return cache.vmids;
-  try {
-    const text = await readFile(CRITICAL_VMID_FILE, 'utf8');
-    const vmids = text
-      .split('\n')
-      .map((l) => l.split('#')[0].trim())
-      .filter(Boolean)
-      .map((s) => Number.parseInt(s, 10))
-      .filter((n) => Number.isInteger(n));
-    cache = { vmids, loadedAt: now };
-    return vmids;
-  } catch {
-    cache = { vmids: [], loadedAt: now };
-    return [];
-  }
+  const raw = process.env.CRITICAL_VMIDS ?? '';
+  const vmids = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => Number.parseInt(s, 10))
+    .filter((n) => Number.isInteger(n));
+  cache = { vmids, loadedAt: now };
+  return vmids;
 }

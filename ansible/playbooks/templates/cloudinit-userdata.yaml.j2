@@ -25,9 +25,11 @@ packages:
 # (not bootcmd) because the binary doesn't exist until packages: completes.
 runcmd:
   - [ systemctl, enable, --now, qemu-guest-agent ]
+{% if dotfiles_url | default('') | length > 0 %}
   - [ sudo, -u, "{{ cloud_user }}", -H, bash, -lc,
       "git clone {{ dotfiles_url }} ~/dotfiles" ]
   - [ sudo, -u, "{{ cloud_user }}", -H, bash, -lc,
       "cd ~/dotfiles && ./install.sh" ]
+{% endif %}
 
 final_message: "VMID {{ item.vmid }} ({{ item.name }}) cloud-init done after $UPTIME seconds."

@@ -1,7 +1,8 @@
 ---
-# Stop + destroy one or more VMs. Critical-VMID protection in
-# .claude/hooks/proxmox-guard.py still hard-denies any destroy verb that
-# targets a VMID listed in .claude/.critical-vmid (currently: 202).
+# Stop + destroy one or more VMs. Critical-VMID protection: any VMID listed
+# in `protection.critical_vmids` (Phase 2+ wizard config) or the CRITICAL_VMIDS
+# env var (Phase 1.5 fallback, comma-separated, e.g. "202,210") hard-fails
+# the destroy.
 #
 # Usage:
 #   ansible-playbook playbooks/destroy-vm.yml -e vmid=204
@@ -17,12 +18,23 @@
   vars:
     # Resolve a single -e vmid=N OR a list -e 'vmids=[a,b]' into a uniform list.
     vmid_list: "{{ vmids | default([vmid] if (vmid is defined) else []) }}"
+    # Phase 1.5: env-var fallback. Phase 2+ wizard puts these in /data/config.yml.
+    critical_vmids: >-
+      {{ (lookup('env', 'CRITICAL_VMIDS') | default('', true)).split(',')
+         | map('trim') | reject('equalto', '') | map('int') | list }}
 
   tasks:
     - name: Sanity — at least one VMID requested
       ansible.builtin.assert:
         that: vmid_list | length > 0
         fail_msg: "Pass -e vmid=<N> or -e 'vmids=[a,b,c]'."
+
+    - name: Critical VMID protection — refuse destroy on protected VMIDs
+      ansible.builtin.assert:
+        that: (vmid_list | map('int') | list) | intersect(critical_vmids) | length == 0
+        fail_msg: >-
+          Refusing to destroy: {{ (vmid_list | map('int') | list) | intersect(critical_vmids) }}
+          is in critical_vmids ({{ critical_vmids }}). Remove from protection list first.
 
     - name: Probe each VMID
       ansible.builtin.command:
